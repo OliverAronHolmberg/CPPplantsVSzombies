@@ -2,6 +2,9 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <memory>
+
+
 
 
 void OpenWindow(){
@@ -19,9 +22,11 @@ void OpenWindow(){
 
 class TextureLoader{
 
-    std::map<std::string, Texture2D> textures = {};
+    
+    
 
     public:
+    std::map<std::string, Texture2D> textures = {};
     void Load(std::string ID, std::string Path){
        if(textures.find(ID) == textures.end()){
         Texture2D texture = LoadTexture(Path.c_str());
@@ -63,27 +68,6 @@ class Tile{
     }
 };
 
-class Player{
-
-
-    public:
-    Player(){
-
-    }
-    void Interaction(std::vector<Tile>& tileVector){
-        if(IsMouseButtonDown(MOUSE_BUTTON_LEFT)){
-            Vector2 mousePos = GetMousePosition();
-            for(int i = 0; i < tileVector.size(); i++){
-                if(CheckCollisionPointRec(mousePos, tileVector[i].rec)){
-                    tileVector[i].color = BLUE;
-                }
-            }
-            
-        }
-    }
-};
-
-
 class Entity{
     protected:
     int x;
@@ -96,10 +80,12 @@ class Entity{
         y = posY;
     }
 
-    void DrawEntity(Texture2D texture){
+    void DrawEntity(){
         Vector2 pos = {x, y};
-        DrawTextureEx(texture, pos, 0.0f, 1.0f, WHITE);
+        // DrawTextureEx(texture, pos, 0.0f, 1.0f, WHITE);
     }
+
+    virtual ~Entity() = default;
 };
 
 class Plant : public Entity{
@@ -124,6 +110,47 @@ class Sunflower : public Plant{
 
 
 
+class Player{
+
+    std::string selectedType;
+    TextureLoader textures;
+    std::vector<std::unique_ptr<Entity>> entityVector;
+    public:
+    Player(std::string Type, TextureLoader textureloader,std::vector<std::unique_ptr<Entity>>& entityList){
+        selectedType = Type;
+        textures = textureloader;
+        entityVector = entityList;
+    }
+    void Interaction(std::vector<Tile>& tileVector){
+        if(IsMouseButtonDown(MOUSE_BUTTON_LEFT)){
+            Vector2 mousePos = GetMousePosition();
+            for(int i = 0; i < tileVector.size(); i++){
+                if(CheckCollisionPointRec(mousePos, tileVector[i].rec)){
+                    tileVector[i].color = BLUE;
+                    float x = tileVector[i].rec.x;
+                    float y = tileVector[i].rec.y;
+                    PlantPlant(x, y);
+                }
+            }
+            
+        }
+    }
+
+    void PlantPlant(int x, int y){
+        if(textures.textures.find(selectedType) == textures.textures.end()){
+            if(selectedType == "SUNFLOWER"){
+                entityVector.push_back(std::make_unique<Sunflower>(x, y, 100, 100));
+            }
+            else{
+
+            }
+        }
+    }
+};
+
+
+
+
 
 
 
@@ -137,10 +164,16 @@ int main(){
     TextureLoader textures;
     LoadTextures(textures);
 
-    Player player;
+    
     std::vector<Tile> tileVector = {};
     Tile tile(100, 100, 100);
     tileVector.push_back(tile);
+
+    std::vector<std::unique_ptr<Entity>> entityVector = {};
+    
+
+    Player player("SUNFLOWER", textures, entityVector);
+    
 
     while(!WindowShouldClose()){
         BeginDrawing();
@@ -150,6 +183,10 @@ int main(){
         for (int i = 0; i < tileVector.size(); i++){
             tileVector[i].DrawTile();
         }
+        for (int i = 0; i < entityVector.size(); i++){
+            entityVector[i]->DrawEntity();
+        }
+
         player.Interaction(tileVector);
 
         EndDrawing();
