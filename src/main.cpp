@@ -7,17 +7,34 @@
 
 
 
-void OpenWindow(){
+Camera2D OpenWindow(int gridW, int gridH, int tileSize){
 
-     InitWindow(0, 0, "Plants VS Zombies");
+    float mapW = gridW * tileSize;
+    float mapH = gridH * tileSize;
+    
+
+    InitWindow(0, 0, "Plants VS Zombies");
     int monitor = GetCurrentMonitor();
-    int monitorW = GetMonitorWidth(monitor);
-    int monitorH = GetMonitorHeight(monitor);
+    // int monitorW = GetMonitorWidth(monitor);
+    // int monitorH = GetMonitorHeight(monitor);
+    int monitorW = 1080*2;
+    int monitorH = 720*2;
     int winW = monitorW/2;
     int winH = monitorH/2;
 
     SetWindowSize(winW, winH);
     SetWindowPosition(monitorW/4, monitorH/4);
+
+    Camera2D camera = { 0 };
+    camera.target.x = mapW / 2.0f;
+    camera.target.y = mapH / 2.0f;
+    camera.offset.x = winW/2.0f;
+    camera.offset.y = winH/2.0f-tileSize/2.0f;
+    
+    
+    camera.zoom = 1.0f;
+
+    return camera;
 }
 
 class TextureLoader{
@@ -46,6 +63,10 @@ void LoadTextures(TextureLoader& textures){
     textures.Load("SUNFLOWER", "resources/sunflower.png");
 }
 
+
+
+
+
 class Tile{
     float x;
     float y;
@@ -72,17 +93,19 @@ class Entity{
     protected:
     int x;
     int y;
+    
 
 
     public: 
-    Entity(int posX, int posY){
-        x = posX;
-        y = posY;
-    }
+    std::string typeID;
+    Rectangle rec;
+    Entity(int posX, int posY, std::string ID, Rectangle rectangle) : x(posX), y(posY), typeID(ID), rec(rectangle){}
 
-    void DrawEntity(){
-        Vector2 pos = {x, y};
-        // DrawTextureEx(texture, pos, 0.0f, 1.0f, WHITE);
+    void DrawEntity(Texture2D texture ){
+        Rectangle sourceRec = {0.0f, 0.0f, (float)texture.width, (float)texture.height};
+        Vector2 origin = {0, 0};
+        
+        DrawTexturePro(texture, sourceRec, rec, origin, 0.0f, WHITE);
     }
 
     virtual ~Entity() = default;
@@ -92,7 +115,7 @@ class Plant : public Entity{
     int sunCost;
 
     public: 
-    Plant(int posX, int posY, int cost) : Entity(posX, posY){
+    Plant(int posX, int posY, std::string ID, int cost, Rectangle rec) : Entity(posX, posY, ID, rec){
         sunCost = cost;
     }
 
@@ -100,10 +123,9 @@ class Plant : public Entity{
 
 class Sunflower : public Plant{
     int hp;
-    const std::string ID = "SUNFLOWER";
 
     public:
-    Sunflower(int posX, int posY, int cost, int health) : Plant(posX, posY, cost){
+    Sunflower(int posX, int posY, int cost, int health, Rectangle rec) : Plant(posX, posY, "SUNFLOWER", cost, rec){
         hp = health;
     }
 };
@@ -114,32 +136,31 @@ class Player{
 
     std::string selectedType;
     TextureLoader textures;
-    std::vector<std::unique_ptr<Entity>> entityVector;
+    std::vector<std::unique_ptr<Entity>>& entityVector;
+    Camera2D camera;
     public:
-    Player(std::string Type, TextureLoader textureloader,std::vector<std::unique_ptr<Entity>>& entityList){
-        selectedType = Type;
-        textures = textureloader;
-        entityVector = entityList;
-    }
+    Player(std::string Type, TextureLoader textureloader,std::vector<std::unique_ptr<Entity>>& entityList, Camera2D playerCam)
+        : selectedType(Type), textures(textureloader), entityVector(entityList), camera(playerCam){}
+    
     void Interaction(std::vector<Tile>& tileVector){
-        if(IsMouseButtonDown(MOUSE_BUTTON_LEFT)){
-            Vector2 mousePos = GetMousePosition();
+        if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
+            Vector2 mousePos = GetScreenToWorld2D(GetMousePosition(), camera);
             for(int i = 0; i < tileVector.size(); i++){
                 if(CheckCollisionPointRec(mousePos, tileVector[i].rec)){
                     tileVector[i].color = BLUE;
                     float x = tileVector[i].rec.x;
                     float y = tileVector[i].rec.y;
-                    PlantPlant(x, y);
+                    PlantPlant(x, y, tileVector[i].rec);
                 }
             }
             
         }
     }
 
-    void PlantPlant(int x, int y){
-        if(textures.textures.find(selectedType) == textures.textures.end()){
+    void PlantPlant(int x, int y, Rectangle rec){
+        if(textures.textures.find(selectedType) != textures.textures.end()){
             if(selectedType == "SUNFLOWER"){
-                entityVector.push_back(std::make_unique<Sunflower>(x, y, 100, 100));
+                entityVector.push_back(std::make_unique<Sunflower>(x, y, 100, 100, rec));
             }
             else{
 
@@ -159,36 +180,53 @@ class Player{
 
 int main(){
 
-    OpenWindow();
+    int gridW = 9;
+    int gridH = 5;
+    int tileSize = 100;
+    Camera2D camera = OpenWindow(gridW, gridH, tileSize);
 
     TextureLoader textures;
     LoadTextures(textures);
 
     
+
+
     std::vector<Tile> tileVector = {};
-    Tile tile(100, 100, 100);
-    tileVector.push_back(tile);
+    for (int y = 0; y <= gridH; y++){
+       for (int x = 0; x < gridW; x++){
+        Tile tile(x*tileSize, y*tileSize, tileSize);
+        tileVector.push_back(tile);
+       }
+    }
+     
+    
 
     std::vector<std::unique_ptr<Entity>> entityVector = {};
     
 
-    Player player("SUNFLOWER", textures, entityVector);
+    Player player("SUNFLOWER", textures, entityVector, camera);
+    
     
 
     while(!WindowShouldClose()){
         BeginDrawing();
 
         ClearBackground(WHITE);
+        
+        BeginMode2D(camera);
 
         for (int i = 0; i < tileVector.size(); i++){
             tileVector[i].DrawTile();
         }
         for (int i = 0; i < entityVector.size(); i++){
-            entityVector[i]->DrawEntity();
+            std::string ID = entityVector[i]->typeID;
+            Texture2D tex = textures.Get(ID);
+            entityVector[i]->DrawEntity(tex);
         }
 
         player.Interaction(tileVector);
 
+        EndMode2D();
         EndDrawing();
     }
 
