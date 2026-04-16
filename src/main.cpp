@@ -22,8 +22,8 @@ Camera2D OpenWindow(int gridW, int gridH, int tileSize){
     int winW = monitorW/2;
     int winH = monitorH/2;
 
-    SetWindowSize(winW, winH);
-    SetWindowPosition(monitorW/4, monitorH/4);
+    SetWindowSize(winW, winH); 
+    SetWindowPosition(monitorW/6, monitorH/8);
 
     Camera2D camera = { 0 };
     camera.target.x = mapW / 2.0f;
@@ -62,6 +62,8 @@ class TextureLoader{
 void LoadTextures(TextureLoader& textures){
     textures.Load("SUNFLOWER", "resources/sunflower.png");
 }
+
+
 
 
 
@@ -131,6 +133,65 @@ class Sunflower : public Plant{
 };
 
 
+class Card{
+    protected:
+    int width;
+    int height;
+    Texture2D texture;
+    Rectangle rec;
+    public:
+
+    int getWidth() const {return width;}
+    int getHeight() const {return height;}
+
+    Card(int Width, int Height, Texture2D Texture){
+        width = Width;
+        height = Height;
+        texture = Texture;
+    }
+
+    void DrawCard(int x, int y){
+        rec = {(float)x, (float)y, (float)width, (float)height};
+        Rectangle sourceRec = {0.0f, 0.0f, (float)texture.width, (float)texture.height};
+        Vector2 origin = {0, 0};
+        DrawRectangle(x, y, width, height, BLACK);
+        DrawTexturePro(texture, sourceRec, rec, origin, 0.0f, WHITE);
+    }
+};
+
+
+
+class Inventory{
+    int x;
+    int y;
+    int width;
+    int height;
+    int spacing = 10;
+    std::vector<Card> cards = {};
+    
+    public:
+    Inventory(int posX, int posY){
+        x = posX;
+        y = posY;
+        
+    }
+
+    void AddCardToInventory(Card card){
+        cards.push_back(card);
+        width = card.getWidth()*cards.size() + (spacing*(cards.size()-1)) + 20;
+        height = card.getHeight() + 20;
+    }
+
+    void DrawInventory(){
+        DrawRectangle(x, y, width, height, GREEN);
+        for (int i = 0; i < cards.size(); i++){
+            cards[i].DrawCard(this->x + 10 + (i*(cards[i].getWidth() + spacing)), this->y+10);
+        }
+    }
+    
+};
+
+
 
 class Player{
 
@@ -172,7 +233,45 @@ class Player{
 
 
 
+class Level{
+    
+    std::vector<Card> levelCards;
+    
+    public:
+    Level(std::vector<std::string> CardIDList, TextureLoader& textures){
+        for (auto item : CardIDList){
+            Card card(100, 100, textures.Get(item));
+            levelCards.push_back(card);
+        }
+    }
 
+    void LoadInventory(Inventory& inventory){
+        for (int i = 0; i < levelCards.size(); i++)
+        inventory.AddCardToInventory(levelCards[i]);
+        
+    }
+    
+    
+};
+
+class LevelHandler{
+    std::vector<Level> levels;
+    public:
+
+
+    void AddLevel(Level level){
+        levels.push_back(level);
+    }
+
+    Level LoadLevel(int levelNumber){
+        Level level = levels[levelNumber-1];
+        return level;
+    }
+
+    
+
+
+};
 
 
 
@@ -188,8 +287,16 @@ int main(){
     TextureLoader textures;
     LoadTextures(textures);
 
-    
+    Inventory inventory(camera.target.x- camera.offset.x + 10, camera.target.y - camera.offset.y + 10);
 
+
+    // Level Intitializer
+    
+    Level* level1 = new Level({"SUNFLOWER", "SUNFLOWER"}, textures);
+    level1->LoadInventory(inventory);
+
+    
+    
 
     std::vector<Tile> tileVector = {};
     for (int y = 0; y <= gridH; y++){
@@ -225,6 +332,8 @@ int main(){
         }
 
         player.Interaction(tileVector);
+
+        inventory.DrawInventory();
 
         EndMode2D();
         EndDrawing();
