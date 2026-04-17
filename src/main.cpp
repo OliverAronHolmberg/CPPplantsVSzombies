@@ -62,6 +62,7 @@ class TextureLoader{
 void LoadTextures(TextureLoader& textures){
     textures.Load("SUNFLOWER", "resources/sunflower.png");
     textures.Load("PEASHOOTER", "resources/peashooter.png");
+    textures.Load("ZOMBIE", "resources/zombie.png");
 }
 
 
@@ -96,19 +97,29 @@ class Entity{
     protected:
     int x;
     int y;
+    float hp;
     
 
 
     public: 
+    bool isDead = false;
+    
     std::string typeID;
     Rectangle rec;
-    Entity(int posX, int posY, std::string ID, Rectangle rectangle) : x(posX), y(posY), typeID(ID), rec(rectangle){}
+    Entity(int posX, int posY, std::string ID, Rectangle rectangle, float health) : x(posX), y(posY), typeID(ID), rec(rectangle), hp(health){}
 
     void DrawEntity(Texture2D texture ){
         Rectangle sourceRec = {0.0f, 0.0f, (float)texture.width, (float)texture.height};
         Vector2 origin = {0, 0};
         
         DrawTexturePro(texture, sourceRec, rec, origin, 0.0f, WHITE);
+    }
+
+    virtual void TakeDamage(float amount){
+        hp -= amount;
+        if(hp <= 0){
+            isDead = true;
+        }
     }
 
     virtual ~Entity() = default;
@@ -118,27 +129,25 @@ class Plant : public Entity{
     int sunCost;
 
     public: 
-    Plant(int posX, int posY, std::string ID, int cost, Rectangle rec) : Entity(posX, posY, ID, rec){
+    Plant(int posX, int posY, std::string ID, int cost, Rectangle rec, float hp) : Entity(posX, posY, ID, rec, hp){
         sunCost = cost;
     }
 
 };
 
 class Sunflower : public Plant{
-    int hp;
 
     public:
-    Sunflower(int posX, int posY, int cost, int health, Rectangle rec) : Plant(posX, posY, "SUNFLOWER", cost, rec){
-        hp = health;
+    Sunflower(int posX, int posY, int cost, Rectangle rec) : Plant(posX, posY, "SUNFLOWER", cost, rec, 100.0f){
+        
     }
 };
 
 class Peashooter : public Plant{
-    int hp;
 
     public:
-    Peashooter(int posX, int posY, int cost, int health, Rectangle rec) : Plant(posX, posY, "PEASHOOTER", cost, rec){
-        hp = health;
+    Peashooter(int posX, int posY, int cost, Rectangle rec) : Plant(posX, posY, "PEASHOOTER", cost, rec, 100.0f){
+        
     }
 };
 
@@ -208,6 +217,77 @@ class Inventory{
     
 };
 
+class Zombie{
+    int x;
+    int y;
+    int width;
+    int height;
+    Texture2D texture;
+    std::string typeID;
+    Rectangle rec;
+    Rectangle collisionRec;
+    float movementSpeed;
+    float hp;
+
+    int moveIDX = 0;
+    bool isBlocked = false;
+    float attackDamage;
+    float attackTimer = 0.0f;
+    float attackInterval = 1.0f;
+    
+
+    public:
+    Zombie(int posX, int posY, int Width, int Height, Texture2D Texture, std::string type){
+        x = posX;
+        y = posY;
+        width = Width;
+        height = Height;
+        texture = Texture;
+        typeID = type;
+        SetTypeVariables();
+    }
+    
+    void SetTypeVariables(){
+        if(typeID == "Normal"){
+            movementSpeed = 1;
+            hp = 10.0f;
+            attackDamage = 20.0f;
+        }
+    }
+
+    void DrawZombie(){
+        Vector2 pos = {(float)x, (float)y};
+        Rectangle source = {0.0f, 0.0f, (float)texture.width, (float)texture.height};
+        rec = {(float)x, (float)y, (float)width, (float)height};
+        Vector2 origin {0,0};
+        DrawTexturePro(texture, source, rec, origin, 0.0f, WHITE);
+    }
+
+    
+
+    void Move(std::vector<std::unique_ptr<Entity>>& plants){
+        collisionRec = {(float)x - 5, (float)y, (float)width/2, (float)height};
+        isBlocked = false;
+        for (int i = 0; i < plants.size(); i++){
+            if (CheckCollisionRecs(collisionRec, plants[i]->rec)){
+                isBlocked = true;
+            
+                attackTimer += GetFrameTime();
+                if(attackTimer >= 1.0f){
+                    plants[i]->TakeDamage(attackDamage);
+                    attackTimer = 0.0f;
+                }
+            }
+        }
+        if(!isBlocked){
+            moveIDX += 1;
+                if (moveIDX >= 10){
+                    x -= movementSpeed*1;
+                    moveIDX = 0;
+                }
+        }
+    }
+};
 
 
 class Player{
@@ -227,7 +307,6 @@ class Player{
                 for (int i = 0; i < inventory.getCards().size(); i++){
                     if (CheckCollisionPointRec(mousePos, inventory.getCards()[i].getRec())){
                         selectedType = inventory.getCards()[i].getTypeID();
-                        inventory.AddCardToInventory(Card(100, 100, textures.Get("SUNFLOWER"), "SUNFLOWER"));
                     }
                 }
             }else{
@@ -248,10 +327,10 @@ class Player{
     void PlantPlant(int x, int y, Rectangle rec){
         if(textures.textures.find(selectedType) != textures.textures.end()){
             if(selectedType == "SUNFLOWER"){
-                entityVector.push_back(std::make_unique<Sunflower>(x, y, 100, 100, rec));
+                entityVector.push_back(std::make_unique<Sunflower>(x, y, 100, rec));
             }
             if(selectedType == "PEASHOOTER"){
-                entityVector.push_back(std::make_unique<Peashooter>(x, y, 100, 100, rec));
+                entityVector.push_back(std::make_unique<Peashooter>(x, y, 100, rec));
             }
             else{
 
@@ -309,6 +388,8 @@ class LevelHandler{
 
 int main(){
     InitWindow(0, 0, "Plants VS Zombies");
+    int FPS = 60;
+    SetTargetFPS(FPS);
     int gridW = 9;
     int gridH = 5;
     float targetW = 2620.0f;
@@ -321,6 +402,8 @@ int main(){
 
     Inventory inventory(camera.target.x- camera.offset.x + 10, camera.target.y - camera.offset.y + 10);
 
+
+    Zombie zombie(tileSize*gridW, tileSize*gridH, tileSize, tileSize, textures.Get("ZOMBIE"), "Normal");
 
     // Level Intitializer
     
@@ -339,7 +422,7 @@ int main(){
     }
      
     
-
+    
     std::vector<std::unique_ptr<Entity>> entityVector = {};
     
 
@@ -358,11 +441,19 @@ int main(){
             tileVector[i].DrawTile();
         }
         for (int i = 0; i < entityVector.size(); i++){
-            std::string ID = entityVector[i]->typeID;
-            Texture2D tex = textures.Get(ID);
-            entityVector[i]->DrawEntity(tex);
+            if(entityVector[i]->isDead){
+                entityVector.erase(entityVector.begin() + i);
+                i--;
+            }else{
+                std::string ID = entityVector[i]->typeID;
+                Texture2D tex = textures.Get(ID);
+                entityVector[i]->DrawEntity(tex);
+            }
+            
         }
-
+        zombie.Move(entityVector);
+        zombie.DrawZombie();
+        
         player.Interaction(tileVector, inventory);
 
         inventory.DrawInventory();
