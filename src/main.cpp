@@ -13,7 +13,7 @@ Camera2D OpenWindow(int gridW, int gridH, int tileSize){
     float mapH = gridH * tileSize;
     
 
-    InitWindow(0, 0, "Plants VS Zombies");
+    
     int monitor = GetCurrentMonitor();
     // int monitorW = GetMonitorWidth(monitor);
     // int monitorH = GetMonitorHeight(monitor);
@@ -61,6 +61,7 @@ class TextureLoader{
 
 void LoadTextures(TextureLoader& textures){
     textures.Load("SUNFLOWER", "resources/sunflower.png");
+    textures.Load("PEASHOOTER", "resources/peashooter.png");
 }
 
 
@@ -132,6 +133,15 @@ class Sunflower : public Plant{
     }
 };
 
+class Peashooter : public Plant{
+    int hp;
+
+    public:
+    Peashooter(int posX, int posY, int cost, int health, Rectangle rec) : Plant(posX, posY, "PEASHOOTER", cost, rec){
+        hp = health;
+    }
+};
+
 
 class Card{
     protected:
@@ -139,15 +149,18 @@ class Card{
     int height;
     Texture2D texture;
     Rectangle rec;
+    std::string typeID;
     public:
-
+    std::string getTypeID() const {return typeID;};
     int getWidth() const {return width;}
     int getHeight() const {return height;}
+    Rectangle getRec() const {return rec;}
 
-    Card(int Width, int Height, Texture2D Texture){
+    Card(int Width, int Height, Texture2D Texture, std::string ID){
         width = Width;
         height = Height;
         texture = Texture;
+        typeID = ID;
     }
 
     void DrawCard(int x, int y){
@@ -168,8 +181,10 @@ class Inventory{
     int height;
     int spacing = 10;
     std::vector<Card> cards = {};
-    
+    Rectangle rec;
     public:
+    Rectangle getRec() const {return rec;}
+    std::vector<Card> getCards() const {return cards;}
     Inventory(int posX, int posY){
         x = posX;
         y = posY;
@@ -180,9 +195,11 @@ class Inventory{
         cards.push_back(card);
         width = card.getWidth()*cards.size() + (spacing*(cards.size()-1)) + 20;
         height = card.getHeight() + 20;
+        rec = {(float)x, (float)y, (float)width, (float)height};
     }
 
     void DrawInventory(){
+        DrawRectangleRec(rec, WHITE);
         DrawRectangle(x, y, width, height, GREEN);
         for (int i = 0; i < cards.size(); i++){
             cards[i].DrawCard(this->x + 10 + (i*(cards[i].getWidth() + spacing)), this->y+10);
@@ -196,24 +213,34 @@ class Inventory{
 class Player{
 
     std::string selectedType;
-    TextureLoader textures;
+    TextureLoader& textures;
     std::vector<std::unique_ptr<Entity>>& entityVector;
     Camera2D camera;
     public:
-    Player(std::string Type, TextureLoader textureloader,std::vector<std::unique_ptr<Entity>>& entityList, Camera2D playerCam)
+    Player(std::string Type, TextureLoader& textureloader, std::vector<std::unique_ptr<Entity>>& entityList, Camera2D playerCam)
         : selectedType(Type), textures(textureloader), entityVector(entityList), camera(playerCam){}
     
-    void Interaction(std::vector<Tile>& tileVector){
+    void Interaction(std::vector<Tile>& tileVector, Inventory& inventory){
         if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
             Vector2 mousePos = GetScreenToWorld2D(GetMousePosition(), camera);
-            for(int i = 0; i < tileVector.size(); i++){
-                if(CheckCollisionPointRec(mousePos, tileVector[i].rec)){
-                    tileVector[i].color = BLUE;
-                    float x = tileVector[i].rec.x;
-                    float y = tileVector[i].rec.y;
-                    PlantPlant(x, y, tileVector[i].rec);
+            if(CheckCollisionPointRec(mousePos, inventory.getRec())){
+                for (int i = 0; i < inventory.getCards().size(); i++){
+                    if (CheckCollisionPointRec(mousePos, inventory.getCards()[i].getRec())){
+                        selectedType = inventory.getCards()[i].getTypeID();
+                        inventory.AddCardToInventory(Card(100, 100, textures.Get("SUNFLOWER"), "SUNFLOWER"));
+                    }
+                }
+            }else{
+                for(int i = 0; i < tileVector.size(); i++){
+                    if(CheckCollisionPointRec(mousePos, tileVector[i].rec)){
+                        tileVector[i].color = BLUE;
+                        float x = tileVector[i].rec.x;
+                        float y = tileVector[i].rec.y;
+                        PlantPlant(x, y, tileVector[i].rec);
+                    }
                 }
             }
+            
             
         }
     }
@@ -222,6 +249,9 @@ class Player{
         if(textures.textures.find(selectedType) != textures.textures.end()){
             if(selectedType == "SUNFLOWER"){
                 entityVector.push_back(std::make_unique<Sunflower>(x, y, 100, 100, rec));
+            }
+            if(selectedType == "PEASHOOTER"){
+                entityVector.push_back(std::make_unique<Peashooter>(x, y, 100, 100, rec));
             }
             else{
 
@@ -240,7 +270,7 @@ class Level{
     public:
     Level(std::vector<std::string> CardIDList, TextureLoader& textures){
         for (auto item : CardIDList){
-            Card card(100, 100, textures.Get(item));
+            Card card(100, 100, textures.Get(item), item);
             levelCards.push_back(card);
         }
     }
@@ -278,10 +308,12 @@ class LevelHandler{
 
 
 int main(){
-
+    InitWindow(0, 0, "Plants VS Zombies");
     int gridW = 9;
     int gridH = 5;
-    int tileSize = 100;
+    float targetW = 2620.0f;
+    float scale = (float)GetScreenWidth() / targetW;
+    int tileSize = 100* scale;
     Camera2D camera = OpenWindow(gridW, gridH, tileSize);
 
     TextureLoader textures;
@@ -292,7 +324,7 @@ int main(){
 
     // Level Intitializer
     
-    Level* level1 = new Level({"SUNFLOWER", "SUNFLOWER"}, textures);
+    Level* level1 = new Level({"SUNFLOWER", "PEASHOOTER"}, textures);
     level1->LoadInventory(inventory);
 
     
@@ -331,7 +363,7 @@ int main(){
             entityVector[i]->DrawEntity(tex);
         }
 
-        player.Interaction(tileVector);
+        player.Interaction(tileVector, inventory);
 
         inventory.DrawInventory();
 
