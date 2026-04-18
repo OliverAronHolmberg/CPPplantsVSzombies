@@ -3,6 +3,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <random>
 
 
 
@@ -135,21 +136,7 @@ class Plant : public Entity{
 
 };
 
-class Sunflower : public Plant{
 
-    public:
-    Sunflower(int posX, int posY, int cost, Rectangle rec) : Plant(posX, posY, "SUNFLOWER", cost, rec, 100.0f){
-        
-    }
-};
-
-class Peashooter : public Plant{
-
-    public:
-    Peashooter(int posX, int posY, int cost, Rectangle rec) : Plant(posX, posY, "PEASHOOTER", cost, rec, 100.0f){
-        
-    }
-};
 
 
 class Card{
@@ -289,6 +276,28 @@ class Zombie{
     }
 };
 
+class Sunflower : public Plant{
+
+    public:
+    Sunflower(int posX, int posY, int cost, Rectangle rec) : Plant(posX, posY, "SUNFLOWER", cost, rec, 100.0f){
+        
+    }
+};
+
+class Peashooter : public Plant{
+
+    public:
+    Peashooter(int posX, int posY, int cost, Rectangle rec) : Plant(posX, posY, "PEASHOOTER", cost, rec, 100.0f){
+        
+    }
+
+    void CheckForZombie(std::vector<Zombie> zombieList){
+
+    }
+
+    
+};
+
 
 class Player{
 
@@ -345,6 +354,11 @@ class Player{
 class Level{
     
     std::vector<Card> levelCards;
+    std::vector<Zombie> activeZombies;
+    int waves = 5;
+    float spawnTimer = 0.0f;
+    float spawnInterval = 5.0f;
+    Texture2D zombieTex;
     
     public:
     Level(std::vector<std::string> CardIDList, TextureLoader& textures){
@@ -352,13 +366,43 @@ class Level{
             Card card(100, 100, textures.Get(item), item);
             levelCards.push_back(card);
         }
+        zombieTex = textures.Get("ZOMBIE");
+    }
+
+    void Update(float deltaTime, int gridW, int gridH, int tileSize, std::vector<std::unique_ptr<Entity>>& plants){
+        spawnTimer += deltaTime;
+
+        if(spawnTimer >= spawnInterval){
+            int randomRow = GetRandomValue(0, gridH-1);
+
+            int spawnX = gridW * tileSize;
+            int spawnY = randomRow * tileSize;
+
+
+            activeZombies.push_back(Zombie(spawnX, spawnY, tileSize, tileSize, zombieTex, "Normal"));
+
+            spawnTimer = 0.0f;
+        }
+
+        for (int i = 0; i < activeZombies.size(); i++){
+            activeZombies[i].Move(plants);
+        }
+    }
+
+    void DrawZombie(){
+        
+        for (auto& z : activeZombies){
+            z.DrawZombie();
+            
+        }
     }
 
     void LoadInventory(Inventory& inventory){
         for (int i = 0; i < levelCards.size(); i++)
         inventory.AddCardToInventory(levelCards[i]);
-        
     }
+
+    
     
     
 };
@@ -403,14 +447,20 @@ int main(){
     Inventory inventory(camera.target.x- camera.offset.x + 10, camera.target.y - camera.offset.y + 10);
 
 
-    Zombie zombie(tileSize*gridW, tileSize*gridH, tileSize, tileSize, textures.Get("ZOMBIE"), "Normal");
+    Zombie zombie();
 
     // Level Intitializer
     
     Level* level1 = new Level({"SUNFLOWER", "PEASHOOTER"}, textures);
+    std::vector<Zombie> level1Zombies = {Zombie(tileSize*gridW, tileSize*gridH, tileSize, tileSize, textures.Get("ZOMBIE"), "Normal")};
     level1->LoadInventory(inventory);
 
     
+    
+    
+
+    
+
     
 
     std::vector<Tile> tileVector = {};
@@ -420,6 +470,9 @@ int main(){
         tileVector.push_back(tile);
        }
     }
+
+    
+
      
     
     
@@ -431,6 +484,13 @@ int main(){
     
 
     while(!WindowShouldClose()){
+
+
+        float dt = GetFrameTime();
+
+        level1->Update(dt, gridW, gridH, tileSize, entityVector);
+        player.Interaction(tileVector, inventory);
+        
         BeginDrawing();
 
         ClearBackground(WHITE);
@@ -451,11 +511,9 @@ int main(){
             }
             
         }
-        zombie.Move(entityVector);
-        zombie.DrawZombie();
         
-        player.Interaction(tileVector, inventory);
-
+        
+        level1->DrawZombie();
         inventory.DrawInventory();
 
         EndMode2D();
