@@ -76,8 +76,11 @@ class Tile{
     float x;
     float y;
     float RecLength;
+    bool isPlanted = false;
     
     public:
+    bool hasPlant() const {return isPlanted;}
+    void setPlanted(bool value) {isPlanted = value;}
     Rectangle rec;
     Color color = RED;
 
@@ -99,15 +102,14 @@ class Entity{
     int x;
     int y;
     float hp;
-    
-
+    bool canAttack;
 
     public: 
     bool isDead = false;
     
     std::string typeID;
     Rectangle rec;
-    Entity(int posX, int posY, std::string ID, Rectangle rectangle, float health) : x(posX), y(posY), typeID(ID), rec(rectangle), hp(health){}
+    Entity(int posX, int posY, std::string ID, Rectangle rectangle, float health, bool canAttackZombie) : x(posX), y(posY), typeID(ID), rec(rectangle), hp(health), canAttack(canAttackZombie){}
 
     void DrawEntity(Texture2D texture ){
         Rectangle sourceRec = {0.0f, 0.0f, (float)texture.width, (float)texture.height};
@@ -123,14 +125,23 @@ class Entity{
         }
     }
 
+    virtual void Attack(float dt, float attackDamage, std::vector<Zombie> zombieVector){
+        if(canAttack){
+            
+        }else{
+
+        }
+    }
+
     virtual ~Entity() = default;
 };
 
 class Plant : public Entity{
     int sunCost;
 
+
     public: 
-    Plant(int posX, int posY, std::string ID, int cost, Rectangle rec, float hp) : Entity(posX, posY, ID, rec, hp){
+    Plant(int posX, int posY, std::string ID, int cost, Rectangle rec, float hp, bool canAttackZombie) : Entity(posX, posY, ID, rec, hp, canAttackZombie){
         sunCost = cost;
     }
 
@@ -279,7 +290,7 @@ class Zombie{
 class Sunflower : public Plant{
 
     public:
-    Sunflower(int posX, int posY, int cost, Rectangle rec) : Plant(posX, posY, "SUNFLOWER", cost, rec, 100.0f){
+    Sunflower(int posX, int posY, int cost, Rectangle rec) : Plant(posX, posY, "SUNFLOWER", cost, rec, 100.0f, false){
         
     }
 };
@@ -287,14 +298,9 @@ class Sunflower : public Plant{
 class Peashooter : public Plant{
 
     public:
-    Peashooter(int posX, int posY, int cost, Rectangle rec) : Plant(posX, posY, "PEASHOOTER", cost, rec, 100.0f){
+    Peashooter(int posX, int posY, int cost, Rectangle rec) : Plant(posX, posY, "PEASHOOTER", cost, rec, 100.0f, true){
         
     }
-
-    void CheckForZombie(std::vector<Zombie> zombieList){
-
-    }
-
     
 };
 
@@ -324,7 +330,11 @@ class Player{
                         tileVector[i].color = BLUE;
                         float x = tileVector[i].rec.x;
                         float y = tileVector[i].rec.y;
-                        PlantPlant(x, y, tileVector[i].rec);
+                        if(tileVector[i].hasPlant() == false){
+                            PlantPlant(tileVector[i]);
+                            
+                        }
+                        
                     }
                 }
             }
@@ -333,13 +343,18 @@ class Player{
         }
     }
 
-    void PlantPlant(int x, int y, Rectangle rec){
+    void PlantPlant(Tile& tile){
         if(textures.textures.find(selectedType) != textures.textures.end()){
+            float x = tile.rec.x;
+            float y = tile.rec.y;
+            
             if(selectedType == "SUNFLOWER"){
-                entityVector.push_back(std::make_unique<Sunflower>(x, y, 100, rec));
+                entityVector.push_back(std::make_unique<Sunflower>(x, y, 100, tile.rec));
+                tile.setPlanted(true);
             }
             if(selectedType == "PEASHOOTER"){
-                entityVector.push_back(std::make_unique<Peashooter>(x, y, 100, rec));
+                entityVector.push_back(std::make_unique<Peashooter>(x, y, 100, tile.rec));
+                tile.setPlanted(true);
             }
             else{
 
@@ -446,11 +461,7 @@ int main(){
 
     Inventory inventory(camera.target.x- camera.offset.x + 10, camera.target.y - camera.offset.y + 10);
 
-
-    Zombie zombie();
-
-    // Level Intitializer
-    
+    // Level Intitializer   
     Level* level1 = new Level({"SUNFLOWER", "PEASHOOTER"}, textures);
     std::vector<Zombie> level1Zombies = {Zombie(tileSize*gridW, tileSize*gridH, tileSize, tileSize, textures.Get("ZOMBIE"), "Normal")};
     level1->LoadInventory(inventory);
